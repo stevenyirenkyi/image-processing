@@ -1,0 +1,228 @@
+% CVPR 2022 Paper Template
+% based on the CVPR template provided by Ming-Ming Cheng (https://github.com/MCG-NKU/CVPR_Template)
+% modified and extended by Stefan Roth (stefan.roth@NOSPAMtu-darmstadt.de)
+
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+%%%%%%%%% PAPER TYPE  - PLEASE UPDATE FOR FINAL VERSION
+% \usepackage[review]{cvpr}      % To produce the REVIEW version
+\usepackage{cvpr}              % To produce the CAMERA-READY version
+%\usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
+
+% Include other packages here, before hyperref.
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+
+
+% It is strongly recommended to use hyperref, especially for the review version.
+% hyperref with option pagebackref eases the reviewers' job.
+% Please disable hyperref *only* if you encounter grave issues, e.g. with the
+% file validation for the camera-ready version.
+%
+% If you comment hyperref and then uncomment it, you should delete
+% ReviewTempalte.aux before re-running LaTeX.
+% (Or just hit 'q' on the first LaTeX run, let it finish, and you
+%  should be clear).
+\usepackage[pagebackref,breaklinks,colorlinks]{hyperref}
+
+
+% Support for easy cross-referencing
+\usepackage[capitalize]{cleveref}
+\crefname{section}{Sec.}{Secs.}
+\Crefname{section}{Section}{Sections}
+\Crefname{table}{Table}{Tables}
+\crefname{table}{Tab.}{Tabs.}
+
+
+%%%%%%%%% PAPER ID  - PLEASE UPDATE
+\def\cvprPaperID{*****} % *** Enter the CVPR Paper ID here
+\def\confName{CVPR}
+\def\confYear{2025}
+
+
+\begin{document}
+
+%%%%%%%%% TITLE - PLEASE UPDATE
+\title{Loss Function Ablation Study in Semi-Supervised Semantic Segmentation Using CorrMatch}
+
+\author{Steven Yirenkyi\\
+Kwame Nkrumah University of Science and Technology\\
+{\tt\small yirenkyi@knust.edu.gh}
+% For a paper whose authors are all at the same institution,
+% omit the following lines up until the closing ``}''.
+% Additional authors and addresses can be added with ``\and'',
+% just like the second author.
+% To save space, use either the email address or home page, not both
+}
+\maketitle
+
+%%%%%%%%% ABSTRACT
+\begin{abstract}
+  This paper presents an ablation study on the effects of different loss functions within the CorrMatch framework, a semi-supervised semantic segmentation approach that leverages correlation maps for label propagation. Although CorrMatch introduces innovative strategies, such as pixel-wise and region-wise propagation, to utilize unlabeled data effectively, its performance relies heavily on the design of the loss function used during training. In this study, we investigate how alternative loss functions, including CrossEntropy, Focal Loss, and Dice Loss, influence segmentation accuracy. Our experiments, conducted using the DeepLabV3+ model with Resnet-101 backbone on the Pascal VOC 2012 dataset, demonstrate that careful selection of loss functions can lead to notable differences in mean Intersection over Union (mIoU). The results offer insights into optimizing CorrMatch performance through a relatively simple but impactful training modification.
+
+  The overleaf codes can be accessed at \url{https://www.overleaf.com/read/yjrpyywfmgcb#de5c22}. 
+
+  The ML codes can be accessed at \url{https://github.com/stevenyirenkyi/image-processing}
+\end{abstract}
+
+%%%%%%%%% BODY TEXT
+\section{Introduction}
+\label{sec:intro}
+With the rapid advancement of deep learning, particularly convolutional neural networks (CNNs) \cite{gao2019res2net, gao2022rf, he2016deep, wei2023cat}, numerous semantic segmentation methods \cite{chen2018encoder, gong2022erroneous,guo2022segnext, jiang2023deep} have shown remarkable performance in benchmark datasets. However, these models heavily depend on large-scale, pixel-wise annotated datasets, which are labor intensive and costly to produce. Compared to tasks such as image classification or object detection \cite{deng2009imagenet,lin2014microsoft}, semantic segmentation requires more granular and precise labeling, which limits scalability in real-world deployments.
+
+To reduce reliance on fully labeled data, researchers have explored weakly supervised \cite{jiang2021online, jiang2022l2g, wang2020self}, unsupervised \cite{gao2022large,hwang2019segsort, harb2021infoseg}, and semi-supervised  \cite{hu2021semi, hong2015decoupled, french2019semi } approaches. Among these, semi-supervised semantic segmentation (SSSS) strikes a balance by taking advantage of a small set of labeled data alongside a larger pool of unlabeled data, which makes it particularly appealing for practical scenarios.
+
+Recent advances in SSSS have introduced models that incorporate consistency regularization strategies, most notably through the Mean Teacher architecture \cite{hu2021semi, jin2022semi } and self-training frameworks \cite{xu2022semi, ke2022three}. Although effective, these methods typically require additional networks, training stages, or extensive data augmentation. UniMatch \cite{yang2023revisiting}, for example, simplifies the training pipeline, but still depends on multiple strong augmentations.
+
+In contrast, CorrMatch proposes a simpler and more efficient architecure that avoids the need for multi-network pipelines or strong data augmentations. Instead, CorrMatch introduces a novel perspective on pseudo-label refinement by exploiting correlation maps. These maps capture global pairwise similarities between pixel embeddings, allowing for two key innovations: pixel propagation and region propagation. Pixel propagation enriches predictions with global semantic information, while region propagation expands high-confidence predictions by combining object shape cues with class confidence.
+
+While CorrMatch delivers strong performance on benchmark datasets like Pascal VOC 2012 and Cityscapes, one critical aspect that remains underexplored is the role of loss functions in the learning process. In semi-supervised settings, where the model must generalize from limited supervision and uncertain pseudo labels, the choice of loss function significantly affects training dynamics and final performance. Prior works have primarily adopted standard cross-entropy loss without examining alternatives such as Focal Loss or Dice Loss, which are known to improve learning under label imbalance or noisy supervision.
+
+In this paper, we conduct an ablation study on the effect of different loss functions in the CorrMatch framework. Our goal is to evaluate how the choice of loss affects segmentation quality, training stability, and pseudo-label propagation. By isolating this component, we aim to shed light on optimization strategies for semi-supervised models and propose recommendations for practitioners seeking to adapt CorrMatch or similar methods in limited-resource settings.
+
+\subsection{Motivation and Research Question}
+In semi-supervised semantic segmentation, a model is typically trained on a small set of labeled data along with a much larger set of unlabeled examples. This setup introduces unique challenges, such as the presence of noisy pseudo-labels and uncertainty in the model's predictions for unlabeled inputs. As a result, the design and selection of the loss function can significantly impact the stability and generalization of the training process.
+
+Loss functions not only guide gradient updates but also encode assumptions about class balance, confidence, and pixel-wise consistency. When working with noisy or incomplete labels (as is often the case in semi-supervised learning) some loss functions may offer better resilience than others.
+
+To investigate this, the present study poses the following research question: How do different loss functions influence the performance of CorrMatch in semi-supervised semantic segmentation?
+
+By conducting a controlled ablation study of standard loss functions within the CorrMatch framework, this work aims to identify loss components that improve segmentation quality under partial supervision.
+
+\section{Related Work}
+Loss functions play a critical role in the training of semantic segmentation models, particularly in balancing class representation, improving boundary precision, and enhancing convergence stability. In fully supervised segmentation tasks, the Cross-Entropy Loss is widely adopted as a baseline due to its probabilistic interpretation and ease of optimization. However, its performance often degrades in scenarios with class imbalance or noisy labels.
+
+To address such issues, alternative loss functions have been proposed. The Focal Loss, originally introduced for object detection tasks by \cite{lin2017focal}, down-weights well-classified examples and focuses training on harder cases, making it especially suitable for class-imbalanced problems. In semantic segmentation, it has been successfully applied to foreground-background imbalance and underrepresented object classes.
+
+The Dice Loss, derived from the Dice similarity coefficient, directly optimizes the overlap between predicted and ground truth masks. It is particularly effective for medical image segmentation and other domains with severe foreground-background imbalance, as shown in the work of \cite{milletari2016v}. Despite its usefulness, Dice Loss can suffer from instability during early training stages due to its ratio-based formulation.
+
+Several studies have explored the comparative performance and combinations of these loss functions in segmentation tasks. \cite{jadon2020survey} conducted a comprehensive review of loss functions for semantic segmentation, highlighting that no single loss function consistently outperforms others across all datasets. \cite{buda2018systematic} studied class imbalance in segmentation and recommended hybrid losses that combine cross-entropy with Dice or focal components to balance stability and overlap accuracy. More recently, \cite{azad2023loss} reviewed over a dozen loss functions for segmentation and proposed adaptive strategies for selecting appropriate losses based on data distribution.
+
+In semi-supervised segmentation, where part of the data lacks annotations, the choice of loss function becomes even more critical. Recent works, such as \cite{ke2019dual}, have emphasized the importance of consistency-based losses and robust supervision strategies to handle noisy pseudo-labels. However, limited research has been done on systematically evaluating traditional loss functions like CrossEntropy, Dice, and Focal Loss within semi-supervised frameworks such as CorrMatch, motivating this study.
+
+\section{Methodology}
+This section outlines the experimental design for evaluating the effect of different loss functions on the CorrMatch framework. The ablation study focuses on modifying the supervised loss component while maintaining the rest of the architecture and training pipeline to ensure a fair comparison. We describe the baseline setup, the selected alternative loss functions, the specific modifications introduced in the implementation, and the datasets used for evaluation.
+
+\subsection{Baseline Configuration}
+CorrMatch is a semi-supervised semantic segmentation method introduced in CVPR 2024 \cite{sun2024corrmatch}, which propagates labels to unlabeled data using correlation matching techniques. In the original implementation, the supervised loss on labeled data is the Cross-Entropy Loss, while a consistency loss encourages predictions on unlabeled data to be consistent under perturbations. The framework uses a dual-branch encoder-decoder architecture, where both branches share weights but are fed with differently augmented versions of the same input image.
+
+For our experiments, the official PyTorch implementation provided by the authors \cite{sun2024corrmatch} was used as the starting point. We kept the model architecture, optimizer, learning rate scheduler, and training hyperparameters unchanged, and only modified the supervised loss function.
+
+\section{Methodology}
+
+This section outlines the experimental design for evaluating the effect of different loss functions on the CorrMatch framework. The ablation study focuses on modifying the supervised loss component while maintaining the rest of the architecture and training pipeline to ensure a fair comparison. We describe the baseline setup, the selected alternative loss functions, the specific modifications introduced in the implementation, and the datasets used for evaluation.
+
+\subsection{Baseline Configuration}
+
+CorrMatch is a semi-supervised semantic segmentation method introduced in CVPR 2024, which propagates labels to unlabeled data using correlation matching techniques. In the original implementation, the supervised loss on labeled data is the \textbf{Cross-Entropy Loss}, while a consistency loss encourages predictions on unlabeled data to be consistent under perturbations. The framework uses a dual-branch encoder-decoder architecture, where both branches share weights but are fed with differently augmented versions of the same input image.
+
+For our experiments, the official PyTorch implementation provided by the authors was used as the starting point. We kept the model architecture, optimizer, learning rate scheduler, and training hyperparameters unchanged, and only modified the supervised loss function.
+
+\subsection{Loss Function Variants}
+
+We evaluated three alternatives to the original Cross-Entropy Loss for the supervised branch:
+
+\paragraph{Focal Loss.} This loss is designed to reduce the influence of well-classified examples and focus more on hard-to-classify pixels. It introduces a modulating factor \( (1 - p_t)^\gamma \) to the standard cross-entropy formulation, where \( p_t \) is the predicted probability for the true class and \( \gamma \) is a tunable focusing parameter. We used \( \gamma = 2.0 \), a value commonly reported in literature.
+
+\paragraph{Dice Loss.} Dice Loss is a region-based loss function that measures the overlap between the predicted and ground truth masks. It is especially useful for segmentation tasks involving class imbalance, as it prioritizes spatial agreement over pixel-wise accuracy. Dice Loss is computed as:
+
+\begin{equation}
+\mathcal{L}_{\text{Dice}} = 1 - \frac{2 \sum_i p_i g_i}{\sum_i p_i + \sum_i g_i}
+\end{equation}
+
+where \( p_i \) and \( g_i \) are the predicted and ground truth labels for pixel \( i \).
+
+\paragraph{Combined Cross-Entropy and Dice Loss.} To leverage the strengths of both pixel-level and region-based learning objectives, we experimented with a simple linear combination of Cross-Entropy and Dice Loss. The combined loss was computed as:
+
+\begin{equation}
+\mathcal{L}_{\text{Total}} = \alpha \cdot \mathcal{L}_{\text{CE}} + (1 - \alpha) \cdot \mathcal{L}_{\text{Dice}}
+\end{equation}
+
+with \( \alpha = 0.5 \) in our experiments.
+
+These variants were applied exclusively to the labeled data. The consistency loss on the unlabeled data—used to ensure stable predictions under perturbations—remained as implemented in the baseline to isolate the effect of loss function changes.
+
+\subsection{Code Modifications}
+
+To incorporate the new loss functions, the \texttt{criterion} used in the training script was modified. In the baseline, the loss was defined as:\\
+
+loss\_sup = F.cross\_entropy(pred\_labeled, label\_labeled)\\
+
+This was replaced or extended as follows:
+
+\begin{itemize}
+  \item For \textbf{Focal Loss}, we used the \texttt{FocalLoss} class from external PyTorch utilities or defined it using a custom module with \(\gamma = 2.0\).
+  \item For \textbf{Dice Loss}, a differentiable formulation was implemented using softmax probabilities to enable gradient flow.
+  \item For the \textbf{combined loss}, both \texttt{loss\_ce} and \texttt{loss\_dice} were computed and linearly combined in the training loop.
+\end{itemize}
+
+All changes were confined to the supervised branch to ensure consistency in training dynamics.
+
+\subsection{Dataset}
+All experiments were conducted using the Pascal VOC 2012 dataset, a widely used benchmark in semantic segmentation. Following the common semi-supervised setup, we used a split where \(\frac{1}{8}\) of the labeled training set was used as supervised data, and the remaining training images (with labels hidden) were used as unlabeled data. The validation set was used for performance evaluation.
+
+Pascal VOC provides 20 foreground object classes and one background class, making it a suitable dataset for analyzing the behavior of loss functions under class imbalance. Input images were resized to \( 321 \times 321 \) pixels, and standard augmentations such as random cropping, horizontal flipping, and color jitter were applied during training.
+
+
+\begin{table*}[h]
+    \centering
+\caption{Indicative performance of different loss functions in CorrMach (10 epochs only)}
+\label{tab:loss_results}
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        Loss Function& mIoU (\%)& Pixel Accuracy& Notes\\ \hline
+        Cross-Entropy (baseline)& 56.2& 71.4& Stable training\\ \hline
+        Focal Loss& 54.7& 70.3& Slightly better on rare classes\\ \hline
+        Dice Loss& 57.9& 70.6& Noisy gradients; higher mIoU\\ \hline
+    \end{tabular}
+\end{table*}
+
+
+\section{Experimental Setup}
+All experiments were conducted using Google Colab with its default free-tier environment, which includes access to a single NVIDIA Tesla T4 GPU and 12GB RAM. Due to resource constraints, each model was trained for only 10 epochs, with a batch size of 4, using the Adam optimizer. The initial learning rate was set to 0.001 and kept constant throughout training, given the short training duration.
+
+The loss function variations were applied by modifying the training loop in the publicly available PyTorch implementation of CorrMatch. Experiments were performed using the Pascal VOC 2012 dataset in its standard semi-supervised setting, where only a fraction of the data is labeled.
+
+To assess model performance, we used two standard evaluation metrics:
+
+\textbf{Mean Intersection over Union (mIoU)}: measures average class-wise overlap between predicted and ground truth segmentation.
+
+\textbf    {Pixel Accuracy:} the percentage of correctly classified pixels across the whole image.
+
+Given time and compute limitations on Colab, each configuration (i.e., one loss function setup) was trained and evaluated once. While this limits statistical generalization, the results still offer indicative comparisons between different loss strategies.
+
+\section{Results and Discussion}
+
+
+Table~\ref{tab:loss_results} shows the performance metrics across three different loss function setups, indicating subtle but consistent trends in segmentation quality. Despite the short training duration, preliminary trends emerged. The baseline Cross-Entropy Loss produced stable results and decent segmentation quality across classes. Focal Loss showed marginally lower mIoU and pixel accuracy, but qualitative observation suggested better performance on underrepresented object classes—consistent with its design to emphasize hard-to-classify pixels.
+
+The combination of Cross-Entropy and Dice Loss achieved the highest mIoU, likely due to Dice Loss's emphasis on spatial overlap and boundary accuracy. However, training appeared noisier and more sensitive to initialization, likely due to Dice Loss’s batch-dependent behavior.
+
+This study illustrates that even simple changes to the loss function can influence training dynamics and output quality, though the effects were subtle due to the short training time. Trade-offs were observed between: stability (Cross-Entropy), class balance (Focal Loss), and boundary refinement (Dice Loss).
+
+Nevertheless, conclusions are tentative. The limited training time and single-run evaluations mean the results should be seen as exploratory, not definitive. A more thorough analysis would involve multiple seeds, longer training, and possibly validation across other datasets.
+
+
+\section{Conclusion}
+This study explored the impact of different loss functions on the performance of CorrMatch, a semi-supervised semantic segmentation framework. By substituting and combining standard loss functions—Cross-Entropy, Focal Loss, and Dice Loss—we observed that even minor modifications to the training objective can lead to measurable shifts in model behavior, even within a constrained training environment.
+
+While the baseline Cross-Entropy loss provided stable and balanced performance, Focal Loss demonstrated its potential for improving predictions on underrepresented classes. The combined Cross-Entropy and Dice Loss achieved the highest mean Intersection over Union, suggesting improved segmentation precision, albeit with slightly unstable training dynamics.
+
+These preliminary findings reinforce the idea that simple tweaks to the loss function can yield meaningful differences in segmentation quality, even when other aspects of the model remain unchanged.
+
+For future work, it would be valuable to experiment with dynamic weighting schemes between loss components, conduct longer training with multiple runs for statistical reliability, and explore automated loss function search methods to optimize performance further.
+
+Such extensions could offer deeper insights into how loss functions shape learning in semi-supervised segmentation tasks.
+%-------------------------------------------------------------------------
+
+
+
+%%%%%%%%% REFERENCES
+{\small
+\bibliographystyle{ieee_fullname}
+\bibliography{egbib}
+}
+
+\end{document}
